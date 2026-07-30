@@ -52,7 +52,9 @@
             transition: background .2s, color .2s;
         }
 
-        .top-bar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 12px; }
+        .top-bar { position: relative; display: flex; justify-content: flex-end; margin-bottom: 12px; min-height: 16px; }
+        .top-bar-dropdown { position: absolute; top: 100%; right: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; overflow: hidden; max-height: 0; opacity: 0; transition: max-height .18s ease, opacity .15s ease; z-index: 150; }
+        .top-bar-dropdown.open { max-height: 200px; opacity: 1; }
         .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-shadow: 0 2px 4px var(--shadow); }
         .collapse-tab { width: 40px; height: 16px; border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; background: var(--card-bg); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-shadow: 0 2px 4px var(--shadow); }
 
@@ -70,8 +72,7 @@
         .row.row-appear { animation: rowAppear .25s ease; }
         @keyframes rowRemove { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-20px); } }
         .row.row-removing { animation: rowRemove .15s ease forwards; pointer-events: none; }
-        .collapsible-content { overflow: hidden; max-height: 0; transition: max-height .3s ease; }
-        .collapsible-content.open { max-height: 3000px; }
+        .collapsible-content { overflow: hidden; max-height: 0; transition: max-height .28s ease; }
         .input-group { margin-bottom: 14px; }
         .input-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; }
         .field-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -217,8 +218,10 @@
 
     <div class="top-bar">
         <button class="collapse-tab" id="topBarCollapseBtn" onclick="toggleTopBarCollapse()" title="Свернуть"></button>
-        <button class="icon-btn" id="indicatorToggleBtn" onclick="toggleIndicator()" title="Индикатор склада"></button>
-        <button class="icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Тема"></button>
+        <div class="top-bar-dropdown" id="topBarDropdown">
+            <button class="icon-btn" id="indicatorToggleBtn" onclick="toggleIndicator()" title="Индикатор склада"></button>
+            <button class="icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Тема"></button>
+        </div>
     </div>
 
     <!-- Раздел 1 -->
@@ -449,7 +452,27 @@
             const content = document.getElementById(contentId);
             const arrow = document.getElementById(arrowId);
             const isOpen = content.classList.contains('open');
-            content.classList.toggle('open', !isOpen);
+
+            if (isOpen) {
+                // Закрываем: сначала фиксируем ТЕКУЩУЮ реальную высоту (а не "любое
+                // большое число") — иначе анимация большую часть времени "стоит на
+                // месте", пока max-height уменьшается с огромного значения, и только
+                // в конце резко схлопывается — это и была та самая ложная задержка.
+                content.style.maxHeight = content.scrollHeight + 'px';
+                content.classList.remove('open');
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        content.style.maxHeight = '0px';
+                    });
+                });
+            } else {
+                content.classList.add('open');
+                content.style.maxHeight = content.scrollHeight + 'px';
+                content.addEventListener('transitionend', function handler() {
+                    if (content.classList.contains('open')) content.style.maxHeight = 'none';
+                    content.removeEventListener('transitionend', handler);
+                });
+            }
             if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
         }
 
@@ -483,8 +506,7 @@
 
         let topBarCollapsed = localStorage.getItem('topBarCollapsed') === 'true';
         function applyTopBarCollapse() {
-            document.getElementById('indicatorToggleBtn').style.display = topBarCollapsed ? 'none' : 'flex';
-            document.getElementById('themeToggleBtn').style.display = topBarCollapsed ? 'none' : 'flex';
+            document.getElementById('topBarDropdown').classList.toggle('open', !topBarCollapsed);
             document.getElementById('topBarCollapseBtn').innerHTML = topBarCollapsed ? CHEVRON_DOWN : CHEVRON_UP;
         }
         function toggleTopBarCollapse() {
