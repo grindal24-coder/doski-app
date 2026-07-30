@@ -54,9 +54,10 @@
 
         .top-bar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 12px; }
         .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-shadow: 0 2px 4px var(--shadow); }
+        .collapse-tab { width: 40px; height: 16px; border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; background: var(--card-bg); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-shadow: 0 2px 4px var(--shadow); }
 
         .tab-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 8px; padding: 10px 15px; margin: 0; background: var(--bg); box-shadow: 0 -2px 6px var(--shadow); z-index: 100; transition: transform .2s ease; }
-        .nav-collapse-btn { position: fixed; right: 15px; bottom: 62px; z-index: 101; width: 32px; height: 32px; transition: bottom .2s ease; }
+        .nav-collapse-btn { position: fixed; right: 15px; bottom: 68px; z-index: 101; transition: bottom .2s ease; }
         .tab-btn { flex: 1; padding: 10px 2px; border: none; background: var(--tab-inactive-bg); color: var(--accent); font-weight: 600; cursor: pointer; font-size: 11px; border-radius: var(--radius-md); box-shadow: 0 1px 3px var(--shadow); transition: transform .15s ease, background .15s ease, color .15s ease; }
         .tab-btn.active { background: var(--accent); color: var(--accent-contrast); transform: scale(1.06); box-shadow: 0 4px 8px rgba(37,99,235,0.3); }
         .tab-content { display: none; background: var(--card-bg); padding: 20px; border-radius: var(--radius-lg); box-shadow: 0 4px 6px var(--shadow); }
@@ -215,7 +216,7 @@
     <div id="appContent" style="display: none;">
 
     <div class="top-bar">
-        <button class="icon-btn" id="topBarCollapseBtn" onclick="toggleTopBarCollapse()" title="Свернуть"></button>
+        <button class="collapse-tab" id="topBarCollapseBtn" onclick="toggleTopBarCollapse()" title="Свернуть"></button>
         <button class="icon-btn" id="indicatorToggleBtn" onclick="toggleIndicator()" title="Индикатор склада"></button>
         <button class="icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Тема"></button>
     </div>
@@ -362,7 +363,7 @@
         <button class="tab-btn" onclick="switchTab(3)">3) Склад</button>
         <button class="tab-btn" onclick="switchTab(4)">4) Заказы</button>
     </div>
-    <button class="icon-btn nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Свернуть меню"></button>
+    <button class="collapse-tab nav-collapse-btn" id="navCollapseBtn" onclick="toggleNavCollapse()" title="Свернуть меню"></button>
 
     </div><!-- /appContent -->
 
@@ -464,8 +465,8 @@
         }
 
         // ===== Сворачивание панелей (стрелка вверх = открыто, вниз = скрыто) =====
-        const CHEVRON_UP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
-        const CHEVRON_DOWN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        const CHEVRON_UP = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+        const CHEVRON_DOWN = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
         let navCollapsed = localStorage.getItem('navCollapsed') === 'true';
         function applyNavCollapse() {
