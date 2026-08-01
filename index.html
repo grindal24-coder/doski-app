@@ -365,6 +365,18 @@
             </div>
             <div id="ordersList"></div>
         </div>
+
+        <div class="history-toggle" onclick="togglePlate('deliveryContent','deliveryArrow')">
+            <span>Привоз</span>
+            <span id="deliveryArrow">▸</span>
+        </div>
+        <div class="collapsible-content" id="deliveryContent">
+            <div id="deliveryBoardsList"></div>
+            <button class="add-btn" type="button" onclick="confirmDelivery()">Добавить на склад</button>
+            <hr style="border: none; border-top: 1px solid var(--border); margin: 18px 0 6px;">
+            <div class="wh-group-title" style="margin-bottom: 8px;">История привозов (за 3 дня)</div>
+            <div id="deliveryHistoryList"></div>
+        </div>
     </div>
 
     <!-- Раздел 4: Заказы -->
@@ -830,6 +842,7 @@
         let ordersRef = null;
         let productsRef = null;
         let orderCounterRef = null;
+        let deliveryLogRef = null;
         try {
             if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "ВСТАВЬ_СЮДА") {
                 firebase.initializeApp(firebaseConfig);
@@ -838,6 +851,7 @@
                 ordersRef = db.ref('orders');
                 productsRef = db.ref('products');
                 orderCounterRef = db.ref('orderCounter');
+                deliveryLogRef = db.ref('deliveryLog');
             }
         } catch (e) {
             console.warn('Firebase не подключен:', e);
@@ -859,6 +873,7 @@
         function refreshProductDependentUI() {
             refreshRowOptions();
             renderWarehouseList(warehouseData);
+            renderDeliveryBoardsList();
         }
 
         // Все подписки на базу запускаются только ПОСЛЕ входа по паролю
@@ -879,8 +894,11 @@
             }
             buildWarehouseTab();
             buildOrdersData();
+            renderDeliveryBoardsList();
+            buildDeliveryHistory();
             flushPendingOrders();
             flushPendingStockEdits();
+            flushPendingDeliveries();
             backfillOrderNumbers();
         }
 
@@ -1181,7 +1199,7 @@
             firebase.database().ref('.info/connected').on('value', snap => {
                 const isConnected = snap.val() === true;
                 statusEl.textContent = isConnected ? 'Подключено.' : 'Не подключен интернет.';
-                if (isConnected) { flushPendingOrders(); flushPendingStockEdits(); }
+                if (isConnected) { flushPendingOrders(); flushPendingStockEdits(); flushPendingDeliveries(); }
             });
 
             warehouseRef.on('value', snapshot => {
@@ -1523,6 +1541,145 @@
             warehouseRef.update(map)
                 .then(() => { savePendingStockEdits({}); stockEditsFlushing = false; })
                 .catch(() => { stockEditsFlushing = false; /* останется в очереди, попробуем ещё раз позже */ });
+        }
+
+        // ==========================================================
+        // ПРИВОЗ — ручной ввод, сколько досок привезли. В отличие от
+        // редактирования на складе, тут значение НЕ перезаписывает
+        // остаток, а ПРИБАВЛЯЕТСЯ к нему. Каждая позиция ещё и попадает
+        // в отдельный журнал (дата/время/доска/количество), который
+        // хранится 3 дня — старше сам чистится при следующем открытии.
+        // ==========================================================
+        function renderDeliveryBoardsList() {
+            const container = document.getElementById('deliveryBoardsList');
+            if (!container) return;
+            container.innerHTML = '';
+            const groups = [
+                { test: p => p.length === 5000, title: '5 метровые' },
+                { test: p => p.length === 6000, title: '6 метровые' },
+                { test: p => p.length !== 5000 && p.length !== 6000, title: '2–3 метровые' }
+            ];
+            groups.forEach(group => {
+                const items = products.filter(p => !p.divider && group.test(p));
+                if (items.length === 0) return;
+                const heading = document.createElement('div');
+                heading.className = 'wh-group-title-row';
+                heading.innerHTML = `<span class="wh-group-title">${group.title}</span>`;
+                container.appendChild(heading);
+                items.forEach(p => {
+                    const row = document.createElement('div');
+                    row.className = 'wh-row';
+                    row.innerHTML = `
+                        <span class="wh-label">${p.label}</span>
+                        <input type="number" class="wh-qty delivery-qty-input" inputmode="numeric" data-label="${p.label}" placeholder="0">
+                    `;
+                    container.appendChild(row);
+                });
+            });
+        }
+
+        function confirmDelivery() {
+            const inputs = document.querySelectorAll('.delivery-qty-input');
+            const now = new Date();
+            const date = now.toLocaleDateString('ru-RU');
+            const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            const timestamp = now.getTime();
+            let any = false;
+
+            inputs.forEach(input => {
+                const qty = parseInt(input.value) || 0;
+                if (qty > 0) {
+                    any = true;
+                    const label = input.dataset.label;
+                    const product = products.find(p => p.label === label);
+                    const price = product ? product.price : 0;
+                    const localId = 'delivery-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+                    queuePendingDelivery({ localId, label, qty, price, date, time, timestamp });
+
+                    // сразу видно на складе результат, не дожидаясь ответа от базы
+                    const key = sanitizeKey(label);
+                    warehouseData[key] = (warehouseData[key] || 0) + qty;
+                    input.value = '';
+                }
+            });
+
+            if (!any) { alert('Впишите количество хотя бы для одной доски.'); return; }
+
+            try { localStorage.setItem('warehouseCache', JSON.stringify(warehouseData)); } catch (e) {}
+            renderWarehouseList(warehouseData);
+            updateStockCheckIndicator();
+            flushPendingDeliveries();
+            alert('Привоз добавлен на склад.');
+        }
+
+        function getPendingDeliveries() {
+            try { return JSON.parse(localStorage.getItem('pendingDeliveries') || '[]'); }
+            catch (e) { return []; }
+        }
+        function savePendingDeliveries(list) {
+            try { localStorage.setItem('pendingDeliveries', JSON.stringify(list)); } catch (e) {}
+        }
+        function queuePendingDelivery(entry) {
+            const list = getPendingDeliveries();
+            list.push(entry);
+            savePendingDeliveries(list);
+        }
+        function removePendingDelivery(localId) {
+            savePendingDeliveries(getPendingDeliveries().filter(e => e.localId !== localId));
+        }
+
+        let flushingDeliveryIds = new Set();
+        function flushPendingDeliveries() {
+            if (!warehouseRef || !deliveryLogRef) return;
+            getPendingDeliveries().forEach(entry => {
+                if (flushingDeliveryIds.has(entry.localId)) return;
+                flushingDeliveryIds.add(entry.localId);
+                const key = sanitizeKey(entry.label);
+                warehouseRef.child(key).transaction(current => (current || 0) + entry.qty)
+                    .then(() => deliveryLogRef.push({ date: entry.date, time: entry.time, label: entry.label, qty: entry.qty, price: entry.price || 0, total: entry.qty * (entry.price || 0), timestamp: entry.timestamp }))
+                    .then(() => {
+                        removePendingDelivery(entry.localId);
+                        flushingDeliveryIds.delete(entry.localId);
+                    })
+                    .catch(() => { flushingDeliveryIds.delete(entry.localId); /* останется в очереди */ });
+            });
+        }
+
+        function buildDeliveryHistory() {
+            const listEl = document.getElementById('deliveryHistoryList');
+            if (!listEl) return;
+
+            // офлайн-кэш — чтобы было что показать до ответа от базы
+            try {
+                const cached = localStorage.getItem('deliveryLogCache');
+                if (cached) renderDeliveryHistoryList(JSON.parse(cached) || {});
+            } catch (e) {}
+
+            if (!deliveryLogRef) return;
+
+            deliveryLogRef.on('value', snapshot => {
+                const data = snapshot.val() || {};
+                try { localStorage.setItem('deliveryLogCache', JSON.stringify(data)); } catch (e) {}
+                renderDeliveryHistoryList(data);
+
+                // чистим записи старше 3 дней
+                const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+                Object.entries(data).forEach(([id, e]) => {
+                    if (!e.timestamp || e.timestamp < cutoff) deliveryLogRef.child(id).remove();
+                });
+            });
+        }
+
+        function renderDeliveryHistoryList(data) {
+            const listEl = document.getElementById('deliveryHistoryList');
+            if (!listEl) return;
+            const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+            const entries = Object.entries(data)
+                .filter(([id, e]) => !e.timestamp || e.timestamp >= cutoff)
+                .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+            listEl.innerHTML = entries.length
+                ? entries.map(([id, e]) => `<div class="sales-stat-row">${e.date || ''} ${e.time || ''} — ${e.label}: ${e.qty} шт × ${e.price || 0} ₽ = ${e.total !== undefined ? e.total : e.qty * (e.price || 0)} ₽</div>`).join('')
+                : '<div class="wh-note">Пока привозов не было.</div>';
         }
 
         function collectCurrentOrder() {
