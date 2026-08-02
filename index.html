@@ -1346,10 +1346,27 @@
             `;
         }
 
+        // Общая логика: возвращает доски на склад, если по заказу было включено
+        // списание и оно ещё не возвращалось (stockReturned защищает от повторов).
+        // Возвращает true, если возврат реально произошёл.
+        function returnStockForOrder(order) {
+            if (order.stockDeducted && !order.stockReturned && warehouseRef) {
+                (order.items || []).forEach(it => {
+                    warehouseRef.child(sanitizeKey(it.label)).transaction(current => (current || 0) + it.qty);
+                });
+                return true;
+            }
+            return false;
+        }
+
         function confirmDeleteOrder(orderId, inputElId) {
             const input = document.getElementById(inputElId);
             if (input && input.value.trim() === '123') {
-                ordersRef.child(orderId).remove();
+                ordersRef.child(orderId).once('value').then(snap => {
+                    const order = snap.val() || {};
+                    returnStockForOrder(order); // если списывали со склада — вернём перед удалением записи
+                    ordersRef.child(orderId).remove();
+                });
             } else {
                 alert('Неверный код. Для удаления записи введите 123.');
             }
@@ -1361,13 +1378,9 @@
                 return;
             }
             // Отмена: если по заказу списывали со склада — вернём доски обратно.
-            // stockReturned защищает от повторного возврата, если нажать "Отменён" ещё раз.
             ordersRef.child(id).once('value').then(snap => {
                 const order = snap.val() || {};
-                if (order.stockDeducted && !order.stockReturned && warehouseRef) {
-                    (order.items || []).forEach(it => {
-                        warehouseRef.child(sanitizeKey(it.label)).transaction(current => (current || 0) + it.qty);
-                    });
+                if (returnStockForOrder(order)) {
                     ordersRef.child(id).update({ status: 'cancelled', stockReturned: true });
                 } else {
                     ordersRef.child(id).child('status').set('cancelled');
