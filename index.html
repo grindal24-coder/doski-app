@@ -957,12 +957,14 @@
         function onAuthReady(user) {
             authResolved = true;
             if (user) {
+                try { localStorage.setItem('wasLoggedIn', 'true'); } catch (e) {}
                 showAppContent();
                 if (!firebaseListenersStarted) {
                     firebaseListenersStarted = true;
                     startFirebaseListeners();
                 }
             } else {
+                try { localStorage.removeItem('wasLoggedIn'); } catch (e) {}
                 showAuthGate();
             }
         }
@@ -984,13 +986,28 @@
 
         if (typeof firebase !== 'undefined' && firebase.auth && firebaseConfig.apiKey !== "ВСТАВЬ_СЮДА") {
             firebase.auth().onAuthStateChanged(onAuthReady);
-            // Подстраховка: если Firebase Auth за 4 сек так и не ответил (браузер
-            // заблокировал, нет связи с серверами Google и т.п.) — не оставляем
-            // человека на вечном белом экране, а хотя бы показываем вход.
+            // Подстраховка: если Firebase Auth за 4 сек так и не ответил (например,
+            // VPN блокирует именно проверочные запросы к серверам Google, хотя
+            // остальной интернет работает) — не мучаем повторным паролем того, кто
+            // уже успешно входил на этом телефоне раньше. Показываем приложение;
+            // если сессия и правда истекла, база данных всё равно откажет в
+            // доступе на своей стороне ("Не подключена авторизация.") — реальная
+            // защита данных при этом никак не ослабляется.
             setTimeout(() => {
                 if (!authResolved) {
-                    console.warn('Firebase Auth не ответил вовремя — показываю экран входа принудительно');
-                    showAuthGate();
+                    let wasLoggedIn = false;
+                    try { wasLoggedIn = localStorage.getItem('wasLoggedIn') === 'true'; } catch (e) {}
+                    if (wasLoggedIn) {
+                        console.warn('Firebase Auth не ответил вовремя, но раньше уже был вход — показываю приложение');
+                        showAppContent();
+                        if (!firebaseListenersStarted) {
+                            firebaseListenersStarted = true;
+                            startFirebaseListeners();
+                        }
+                    } else {
+                        console.warn('Firebase Auth не ответил вовремя — показываю экран входа');
+                        showAuthGate();
+                    }
                 }
             }, 4000);
         } else {
