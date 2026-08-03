@@ -870,6 +870,17 @@
             } catch (e) { /* игнорируем битый кэш */ }
         })();
 
+        // Firebase отдаёт узел как МАССИВ только если все ключи внутри — подряд
+        // идущие числа 0,1,2... Если добавить новый товар через консоль Firebase
+        // не тем способом (оставить поле "Name" пустым, и консоль сама придумает
+        // ключ) — узел превращается в ОБЪЕКТ с "рваными" ключами, и старая проверка
+        // "это массив?" не срабатывала. Тут приводим и то, и другое к единому виду.
+        function normalizeProductsData(data) {
+            if (Array.isArray(data)) return data.filter(p => p);
+            if (data && typeof data === 'object') return Object.values(data).filter(p => p);
+            return null;
+        }
+
         function refreshProductDependentUI() {
             refreshRowOptions();
             renderWarehouseList(warehouseData);
@@ -881,13 +892,15 @@
         function startFirebaseListeners() {
             if (productsRef) {
                 productsRef.on('value', snapshot => {
-                    const data = snapshot.val();
-                    if (Array.isArray(data) && data.length > 0) {
-                        products = data;
+                    const raw = snapshot.val();
+                    const normalized = normalizeProductsData(raw);
+                    if (normalized && normalized.length > 0) {
+                        products = normalized;
                         localStorage.setItem('productsCache', JSON.stringify(products));
                         refreshProductDependentUI();
-                    } else {
-                        // база пуста (первый запуск когда-либо) — заливаем туда начальный список один раз
+                    } else if (!raw) {
+                        // база и правда совсем пуста (самый первый запуск когда-либо) —
+                        // заливаем туда начальный список один раз
                         productsRef.set(products);
                     }
                 });
