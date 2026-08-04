@@ -89,8 +89,14 @@
         input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
         .result { font-size: 18px; font-weight: 700; margin-top: 15px; color: var(--accent); }
 
-        .row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; background: var(--row-bg); padding: 10px 8px; border-radius: var(--radius-md); flex-wrap: nowrap; }
-        .row select { flex: 1 1 auto; min-width: 0; max-width: 100%; font-size: 14px; padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; }
+        .row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; background: var(--row-bg); padding: 10px 8px; border-radius: var(--radius-md); }
+        .row-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+        .row-price-per-piece { font-weight: 600; }
+        .row-main { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+        .row-main select { flex: 1 1 auto; min-width: 0; max-width: 100%; font-size: 14px; padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; }
+        .row-price-editor { display: flex; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--border); }
+        .row-price-editor input { flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--card-bg); color: var(--text); }
+        .row-price-editor button { padding: 6px 10px; border: none; background: var(--accent); color: white; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; }
         .counter { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
         .btn-count { width: 26px; height: 26px; border: 1px solid var(--border); background: var(--card-bg); color: var(--accent); font-weight: 700; border-radius: 6px; font-size: 15px; padding: 0; flex-shrink: 0; }
         .count-input { width: 46px; text-align: center; border: 1px solid var(--border); padding: 3px 2px; font-size: 14px; border-radius: 6px; flex-shrink: 0; }
@@ -188,12 +194,12 @@
         .backup-row { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 10px; }
         .btn-backup { padding: 8px 12px; border: 1px solid var(--accent); background: var(--card-bg); color: var(--accent); border-radius: var(--radius-md); font-size: 12px; font-weight: 700; cursor: pointer; }
 
-        #positions-list > div { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-        .row select { flex: 1 1 100%; width: 100%; font-size: 14px; padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; }
+        #positions-list .row-main { display: flex; gap: 10px; flex-wrap: wrap; }
+        .row-main select { flex: 1 1 100%; width: 100%; font-size: 14px; padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; }
         .counter, .price-display { flex: 1; }
         @media (min-width: 768px) {
-            #positions-list > div { flex-wrap: nowrap; align-items: center; }
-            .row select { flex: 1 1 auto; width: auto; min-width: 0; max-width: 100%; }
+            #positions-list .row-main { flex-wrap: nowrap; align-items: center; }
+            .row-main select { flex: 1 1 auto; width: auto; min-width: 0; max-width: 100%; }
             .counter, .price-display { flex: 0 1 auto; }
         }
         .btn-reset { border-color: var(--muted) !important; color: var(--muted) !important; font-size: 13px; margin-left: 25px; margin-right: -5px; }
@@ -635,17 +641,27 @@
             row.className = 'row row-appear';
 
             row.innerHTML = `
-                <span class="order-stock-dot" title="Наличие на складе"></span>
-                <select class="row-select" onchange="updateRow(this)">${buildProductOptionsHtml()}</select>
-                <div class="counter">
-                    <button class="btn-count" type="button" onclick="changeQty(this, -1)">-</button>
-                    <input type="number" inputmode="numeric" class="count-input" value="1" oninput="updateRow(this)">
-                    <button class="btn-count" type="button" onclick="changeQty(this, 1)">+</button>
-                    <button class="btn-m3" type="button" onclick="setQtyToM3(this)">м³</button>
-                    <button class="btn-count btn-reset" type="button" onclick="resetQty(this)" title="Обнулить">0</button>
+                <div class="row-top">
+                    <span class="row-price-per-piece">цена за шт: <span class="ppu-value">0</span>₽</span>
+                    <button class="icon-sm icon-edit" type="button" onclick="toggleRowPriceEditor(this)" title="Изменить цену для этого заказа">✎</button>
                 </div>
-                <div class="price-display">0 ₽</div>
-                <button class="btn-delete" type="button" onclick="removeRow(this)">×</button>
+                <div class="row-main">
+                    <span class="order-stock-dot" title="Наличие на складе"></span>
+                    <select class="row-select" onchange="onBoardSelectChange(this)">${buildProductOptionsHtml()}</select>
+                    <div class="counter">
+                        <button class="btn-count" type="button" onclick="changeQty(this, -1)">-</button>
+                        <input type="number" inputmode="numeric" class="count-input" value="1" oninput="updateRow(this)">
+                        <button class="btn-count" type="button" onclick="changeQty(this, 1)">+</button>
+                        <button class="btn-m3" type="button" onclick="setQtyToM3(this)">м³</button>
+                        <button class="btn-count btn-reset" type="button" onclick="resetQty(this)" title="Обнулить">0</button>
+                    </div>
+                    <div class="price-display">0 ₽</div>
+                    <button class="btn-delete" type="button" onclick="removeRow(this)">×</button>
+                </div>
+                <div class="row-price-editor" style="display: none;">
+                    <input type="number" class="row-price-input" placeholder="Цена за шт">
+                    <button type="button" onclick="applyRowPriceOverride(this)">Готово</button>
+                </div>
             `;
             container.appendChild(row);
             updateRow(row.querySelector('select'));
@@ -724,12 +740,56 @@
             updateRow(row.querySelector('.count-input'));
         }
 
+        // Цена за штуку для конкретной строки заказа: если для неё вручную
+        // задана своя цена (карандаш) — берём её, иначе обычную из каталога.
+        function getRowPrice(row, product) {
+            const override = row.dataset.priceOverride;
+            return (override !== undefined && override !== '') ? parseFloat(override) : product.price;
+        }
+
+        function onBoardSelectChange(select) {
+            // при смене доски старая ручная цена теряет смысл — сбрасываем
+            const row = select.closest('.row');
+            delete row.dataset.priceOverride;
+            updateRow(select);
+        }
+
+        function toggleRowPriceEditor(btn) {
+            const row = btn.closest('.row');
+            const editor = row.querySelector('.row-price-editor');
+            const input = row.querySelector('.row-price-input');
+            const isHidden = editor.style.display === 'none' || getComputedStyle(editor).display === 'none';
+            if (isHidden) {
+                const productIndex = row.querySelector('select').value;
+                const product = products[productIndex];
+                input.value = product ? getRowPrice(row, product) : '';
+                editor.style.display = 'flex';
+                input.focus();
+            } else {
+                editor.style.display = 'none';
+            }
+        }
+
+        function applyRowPriceOverride(btn) {
+            const row = btn.closest('.row');
+            const input = row.querySelector('.row-price-input');
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val >= 0) {
+                row.dataset.priceOverride = val;
+            }
+            row.querySelector('.row-price-editor').style.display = 'none';
+            updateRow(row.querySelector('.count-input'));
+        }
+
         function updateRow(element) {
             let row = element.closest('.row');
             let productIndex = row.querySelector('select').value;
             let qty = parseInt(row.querySelector('.count-input').value) || 0;
-            let itemPrice = products[productIndex] ? products[productIndex].price : 0;
+            let product = products[productIndex];
+            let itemPrice = product ? getRowPrice(row, product) : 0;
             row.querySelector('.price-display').innerText = `${itemPrice * qty} ₽`;
+            const ppuEl = row.querySelector('.ppu-value');
+            if (ppuEl) ppuEl.textContent = itemPrice;
             calculateTotal();
             updateStockCheckIndicator();
         }
@@ -739,7 +799,8 @@
             document.querySelectorAll('.row').forEach(row => {
                 let productIndex = row.querySelector('select').value;
                 let qty = parseInt(row.querySelector('.count-input').value) || 0;
-                let price = products[productIndex] ? products[productIndex].price : 0;
+                let product = products[productIndex];
+                let price = product ? getRowPrice(row, product) : 0;
                 total += price * qty;
             });
             let delivery = parseFloat(document.getElementById('delivery').value) || 0;
@@ -758,7 +819,8 @@
                 const opt = select.options[select.selectedIndex];
                 const label = opt ? opt.textContent : null;
                 const qty = row.querySelector('.count-input').value;
-                if (label) rows.push({ label, qty });
+                const priceOverride = row.dataset.priceOverride || null;
+                if (label) rows.push({ label, qty, priceOverride });
             });
             const draft = {
                 rows,
@@ -790,6 +852,7 @@
                     const idx = products.findIndex(p => p.label === r.label);
                     if (idx >= 0) select.value = idx;
                     row.querySelector('.count-input').value = r.qty;
+                    if (r.priceOverride) row.dataset.priceOverride = r.priceOverride;
                     updateRow(select);
                 });
                 if (draft.delivery) document.getElementById('delivery').value = draft.delivery;
@@ -1733,9 +1796,10 @@
                 const product = products[idx];
                 if (!product || product.divider) return;
                 const qty = parseInt(row.querySelector('.count-input').value) || 0;
+                const price = getRowPrice(row, product);
                 if (qty > 0) {
-                    items.push({ label: product.label, qty: qty, price: product.price });
-                    boardsCost += product.price * qty;
+                    items.push({ label: product.label, qty: qty, price: price });
+                    boardsCost += price * qty;
                 }
             });
             const delivery = parseFloat(document.getElementById('delivery').value) || 0;
